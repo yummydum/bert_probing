@@ -16,6 +16,9 @@ import torch
 from pytorch_transformers import BertConfig,BertModel, BertTokenizer
 from sklearn.linear_model import SGDClassifier
 
+# fix seed
+np.random.seed(0)
+
 # Load model
 model_type = 'bert-base-uncased'
 tokenizer = BertTokenizer.from_pretrained(model_type)
@@ -67,6 +70,8 @@ def train(args):
                 # preprocess y
                 if args.target == "pos":
                     y = np.array([train_data["all_pos"].index(l[0]) for l in y])
+                else:
+                    y = y.squeeze()
                 probing_models[i].partial_fit(X,y,classes=class_num)
             # Stop here if debug mode
             if args.debug and example_num > 3:
@@ -76,10 +81,12 @@ def train(args):
         logging.info(f"Current accuracy is {acc}")
         # Save the model for this epoch
         for i in range(13):  # Num layer == 13
-            dump(probing_models[i],f"probing_data/ST/{i}_{epoch}.joblib")
+            save_path = f"probing_data/ST/layer{i}_epoch{epoch}_target{args.target}.joblib"
+            dump(probing_models[i],save_path)
 
 # all_pos = train_data["all_pos"]
 def evaluate(args,probing_models,all_pos,is_dev):
+    logging.info("Now starting evaluation...")
     correct = 0
     total = 0
     # Read the datas
@@ -143,8 +150,8 @@ def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
             continue
         else:
             # -cum_skip_step for number o0f skips
-            logging.debug(f"BPE tokenized:{tokenized[j]}")
-            logging.debug(f"Original token:{original_tokenized[j-cum_skip_step]}")
+            # logging.debug(f"BPE tokenized:{tokenized[j]}")
+            # logging.debug(f"Original token:{original_tokenized[j-cum_skip_step]}")
 
             # y
             t = target[j-cum_skip_step-1]
@@ -155,7 +162,7 @@ def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
                 X.append(hidden_i[j])
             # Else restore the original token
             else:
-                logging.debug("Inconsistency found")
+                # logging.debug("Inconsistency found")
                 temp_token_list = [tokenized[j]]
                 temp_hid_rep_list = hidden_i[j]
                 for k in range(j+1,len(tokenized)):  # k = 0
@@ -164,9 +171,9 @@ def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
                     skip_step += 1
                     # If the concatenated BPE matches the original token, write the result
                     temp = "".join(temp_token_list).replace("##","")
-                    logging.debug(f"concatenated:{temp}")
+                    # logging.debug(f"concatenated:{temp}")
                     if original_tokenized[j-cum_skip_step] == temp:
-                        logging.debug(f"Match! {temp}")
+                        # logging.debug(f"Match! {temp}")
                         X.append(temp_hid_rep_list / len(temp_token_list))
                         break
 
