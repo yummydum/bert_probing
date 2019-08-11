@@ -112,30 +112,41 @@ def evaluate(args,probing_models,all_pos,is_dev):
 
         # Fit model for ith model
         for i in range(len(all_hid_list)): # i = 1
-            target = example[args.target]
             X,y = extract_X_y(args,
                               tokenized,
                               sentence.split(" "),
-                              target,
+                              example,
                               all_hid_list[i])
-            y_hat = probing_models[i].predict(X)
-            # postprocess y
-            if args.target == "pos":
-                y_hat =[all_pos[l] for l in y_hat]
-            correct += np.sum(y_hat == y.T)
-            total += len(y_hat)
+
+            # TODO Solve this error
+            try:
+                y_hat = probing_models[i].predict(X)
+                # postprocess y
+                if args.target == "pos":
+                    y_hat =[all_pos[l] for l in y_hat]
+                correct += np.sum(y_hat == y.T)
+                total += len(y_hat)
+
+            except:
+                print(X.shape)
+                print(y.shape)
+                print(y)
+                print(example_num)
+                print(example)
+                break
         # Stop here if debug mode
-        if args.debug and example_num > 3:
-            break
+        # if args.debug and example_num > 3:
+        #     break
 
     return correct / total
 
 # original_tokenized = sentence.split(" "); hidden_i = all_hid_list[i]
-def extract_X_y(args,tokenized,original_tokenized,target,hidden_i):
+def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
     """
     Resolve the inconsistency between simple tokenization and BPE
     """
     # Start loop
+    target = example[args.target]
     skip_step = 0
     cum_skip_step = 0
     X,y = [],[]
