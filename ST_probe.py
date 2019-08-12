@@ -72,7 +72,16 @@ def train(args):
                     y = np.array([train_data["all_pos"].index(l[0]) for l in y])
                 else:
                     y = y.squeeze()
-                probing_models[i].partial_fit(X,y,classes=class_num)
+
+                # TODO Solve this error
+                try:
+                    probing_models[i].partial_fit(X,y,classes=class_num)
+                except:
+                    print(X.shape)
+                    print(y.shape)
+                    print(y)
+                    print(example_num)
+                    print(example)
             # Stop here if debug mode
             if args.debug and example_num > 3:
                 break
@@ -135,8 +144,8 @@ def evaluate(args,probing_models,all_pos,is_dev):
                 print(example)
                 break
         # Stop here if debug mode
-        # if args.debug and example_num > 3:
-        #     break
+        if args.debug and example_num > 3:
+            break
 
     return correct / total
 
