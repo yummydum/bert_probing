@@ -50,7 +50,7 @@ def train(args):
         for example_num,example in train_data["data"].items(): # example = train_data["data"]['1']
             example_num = int(example_num)
             # Report progress
-            if example_num % 1000 == 0:
+            if example_num % 10000 == 0:
                 logging.info(f"Now at {example_num}th example")
             # Forward
             sentence = "[CLS] " + " ".join(example["word"]) + " [SEP]"
@@ -73,21 +73,12 @@ def train(args):
                 else:
                     y = y.squeeze()
 
-                # TODO Solve this error
-                try:
-                    probing_models[i].partial_fit(X,y,classes=class_num)
-                except:
-                    print(X.shape)
-                    print(y.shape)
-                    print(y)
-                    print(example_num)
-                    print(example)
+                probing_models[i].partial_fit(X,y,classes=class_num)
             # Stop here if debug mode
             if args.debug and example_num > 3:
                 break
         # Evaluate accuracy on dev data
-        acc = evaluate(args,probing_models,train_data["all_pos"],is_dev=True)
-        logging.info(f"Current accuracy is {acc}")
+        evaluate(args,probing_models,train_data["all_pos"],is_dev=True)
         # Save the model for this epoch
         for i in range(13):  # Num layer == 13
             save_path = f"probing_data/ST/layer{i}_epoch{epoch}_target{args.target}.joblib"
@@ -96,8 +87,9 @@ def train(args):
 # all_pos = train_data["all_pos"]
 def evaluate(args,probing_models,all_pos,is_dev):
     logging.info("Now starting evaluation...")
-    correct = 0
-    total = 0
+    result_dict = dict()
+    for i in range(13):
+        result_dict[i] = 0
     # Read the datas
     if is_dev:
         data_path = Path(f"probing_data/ST/ST-dev.json")
@@ -106,10 +98,10 @@ def evaluate(args,probing_models,all_pos,is_dev):
     with data_path.open(mode="r") as f:
         data = json.load(f)
 
-    for example_num,example in data["data"].items(): # example = train_data["data"]['1']
+    for example_num,example in data["data"].items(): # example = data["data"]['1698']
         example_num = int(example_num)
         # Report progress
-        if example_num % 1000 == 0:
+        if example_num % 500 == 0:
             logging.info(f"Now at {example_num}th example")
         # Forward
         sentence = "[CLS] " + " ".join(example["word"]) + " [SEP]"
@@ -126,28 +118,22 @@ def evaluate(args,probing_models,all_pos,is_dev):
                               sentence.split(" "),
                               example,
                               all_hid_list[i])
-
-            # TODO Solve this error
-            try:
-                y_hat = probing_models[i].predict(X)
-                # postprocess y
-                if args.target == "pos":
-                    y_hat =[all_pos[l] for l in y_hat]
-                correct += np.sum(y_hat == y.T)
-                total += len(y_hat)
-
-            except:
-                print(X.shape)
-                print(y.shape)
-                print(y)
-                print(example_num)
-                print(example)
-                break
+            y_hat = probing_models[i].predict(X)
+            # postprocess y
+            if args.target == "pos":
+                y_hat =[all_pos[l] for l in y_hat]
+            result_dict[i] += np.sum(y_hat == y.T)
         # Stop here if debug mode
         if args.debug and example_num > 3:
             break
-
-    return correct / total
+    if is_dev:
+        for i in range(len(all_hid_list)):
+            acc = result_dict[i] /1628
+            result_dict[i] = acc
+            logging.info(f"Accuracy for {i}th layer is {acc}")
+        return result_dict
+    else:
+        raise NotImplementedError()
 
 # original_tokenized = sentence.split(" "); hidden_i = all_hid_list[i]
 def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
@@ -214,6 +200,7 @@ if __name__ == '__main__':
     # Set logger
     if args.debug:
         level = logging.DEBUG
+        args.epoch_num = 3
     else:
         level = logging.INFO
     logging.basicConfig(level=level,

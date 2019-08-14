@@ -9,10 +9,6 @@ from pathlib import Path
 import json
 import logging
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(process)d-%(asctime)s-%(levelname)s-%(message)s',
-                    datefmt='%d-%b-%y %H:%M:%S')
-
 def main(args):
 
     # Init the dicts
@@ -62,9 +58,10 @@ def main(args):
                 result_dict["all_pos"].add(tok[4].upper())
                 result_dict["all_relation"].add(tok[7])
 
-        # End of loop, yield the last sentence
-        if len(entry_dict) > 1:
-            result_dict["data"][count] = entry_dict
+        # End of loop, if there is
+        if len(entry_dict["word"]) > 1:
+            result_dict["data"][count] = entry_dict.copy()
+    logging.info(f"Process finished, total number of example is {count}")
 
     # Dump the result into json
     for i in ["all_pos","all_cpos","all_relation"]:
@@ -76,9 +73,17 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("which",type=str,
-                        help="Train or dev or test")
+    parser.add_argument("which",type=str,choices=["train","dev","test"],
+                        help="Which data to process")
     parser.add_argument("--debug",action='store_true',
                         help="Debug mode if flagged")
     args = parser.parse_args()
+    if args.debug:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logging.basicConfig(level=level,
+                        format='%(process)d-%(asctime)s-%(levelname)s-%(message)s',
+                        datefmt='%d-%b-%y %H:%M:%S')
+
     main(args)
