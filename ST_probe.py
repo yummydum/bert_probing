@@ -8,12 +8,13 @@ Probe BERT hidden representations for POS tagging and dependency parsing (Lingui
 
 import argparse
 import logging
+from logging import getLogger, StreamHandler, FileHandler
 import json
 from pathlib import Path
 import numpy as np
 from joblib import dump, load
 import torch
-from pytorch_transformers import BertConfig,BertModel, BertTokenizer
+from pytorch_transformers import BertConfig, BertModel, BertTokenizer
 from sklearn.linear_model import SGDClassifier
 
 # fix seed
@@ -27,6 +28,7 @@ config.output_hidden_states = True
 config.output_attentions = True
 model = BertModel(config)
 model.eval()
+
 
 def train(args):
     # Read the datas
@@ -47,7 +49,8 @@ def train(args):
 
     # Train loop
     for epoch in range(args.epoch_num):
-        for example_num,example in train_data["data"].items(): # example = train_data["data"]['1']
+        for example_num, example in train_data["data"].items(
+        ):  # example = train_data["data"]['1']
             example_num = int(example_num)
             # Report progress
             if example_num % 10000 == 0:
@@ -56,36 +59,37 @@ def train(args):
             sentence = "[CLS] " + " ".join(example["word"]) + " [SEP]"
             tokenized = tokenizer.tokenize(sentence)
             encoded = tokenizer.encode(sentence)
-            tensor = torch.LongTensor(encoded).reshape(1,len(encoded))
-            last_hid,pooler,all_hid,all_attention = model(tensor)
-            all_hid_list = [all_hid[i][0].detach().numpy() for i in range(len(all_hid))]
+            tensor = torch.LongTensor(encoded).reshape(1, len(encoded))
+            last_hid, pooler, all_hid, all_attention = model(tensor)
+            all_hid_list = [
+                all_hid[i][0].detach().numpy() for i in range(len(all_hid))
+            ]
 
             # Fit model for ith model
-            for i in range(len(all_hid_list)): # i = 1
-                X,y = extract_X_y(args,
-                                  tokenized,
-                                  sentence.split(" "),
-                                  example,
-                                  all_hid_list[i])
+            for i in range(len(all_hid_list)):  # i = 1
+                X, y = extract_X_y(args, tokenized, sentence.split(" "),
+                                   example, all_hid_list[i])
                 # preprocess y
                 if args.target == "pos":
-                    y = np.array([train_data["all_pos"].index(l[0]) for l in y])
+                    y = np.array(
+                        [train_data["all_pos"].index(l[0]) for l in y])
                 else:
                     y = y.squeeze()
 
-                probing_models[i].partial_fit(X,y,classes=class_num)
+                probing_models[i].partial_fit(X, y, classes=class_num)
             # Stop here if debug mode
             if args.debug and example_num > 3:
                 break
         # Evaluate accuracy on dev data
-        evaluate(args,probing_models,train_data["all_pos"],is_dev=True)
+        evaluate(args, probing_models, train_data["all_pos"], is_dev=True)
         # Save the model for this epoch
         for i in range(13):  # Num layer == 13
             save_path = f"probing_data/ST/layer{i}_epoch{epoch}_target{args.target}.joblib"
-            dump(probing_models[i],save_path)
+            dump(probing_models[i], save_path)
+
 
 # all_pos = train_data["all_pos"]
-def evaluate(args,probing_models,all_pos,is_dev):
+def evaluate(args, probing_models, all_pos, is_dev):
     logging.info("Now starting evaluation...")
     result_dict = dict()
     for i in range(13):
@@ -98,7 +102,8 @@ def evaluate(args,probing_models,all_pos,is_dev):
     with data_path.open(mode="r") as f:
         data = json.load(f)
 
-    for example_num,example in data["data"].items(): # example = data["data"]['1698']
+    for example_num, example in data["data"].items(
+    ):  # example = data["data"]['1698']
         example_num = int(example_num)
         # Report progress
         if example_num % 500 == 0:
@@ -107,36 +112,36 @@ def evaluate(args,probing_models,all_pos,is_dev):
         sentence = "[CLS] " + " ".join(example["word"]) + " [SEP]"
         tokenized = tokenizer.tokenize(sentence)
         encoded = tokenizer.encode(sentence)
-        tensor = torch.LongTensor(encoded).reshape(1,len(encoded))
-        last_hid,pooler,all_hid,all_attention = model(tensor)
-        all_hid_list = [all_hid[i][0].detach().numpy() for i in range(len(all_hid))]
+        tensor = torch.LongTensor(encoded).reshape(1, len(encoded))
+        last_hid, pooler, all_hid, all_attention = model(tensor)
+        all_hid_list = [
+            all_hid[i][0].detach().numpy() for i in range(len(all_hid))
+        ]
 
         # Fit model for ith model
-        for i in range(len(all_hid_list)): # i = 1
-            X,y = extract_X_y(args,
-                              tokenized,
-                              sentence.split(" "),
-                              example,
-                              all_hid_list[i])
+        for i in range(len(all_hid_list)):  # i = 1
+            X, y = extract_X_y(args, tokenized, sentence.split(" "), example,
+                               all_hid_list[i])
             y_hat = probing_models[i].predict(X)
             # postprocess y
             if args.target == "pos":
-                y_hat =[all_pos[l] for l in y_hat]
+                y_hat = [all_pos[l] for l in y_hat]
             result_dict[i] += np.sum(y_hat == y.T)
         # Stop here if debug mode
         if args.debug and example_num > 3:
             break
     if is_dev:
         for i in range(len(all_hid_list)):
-            acc = result_dict[i] /1628
+            acc = result_dict[i] / 1628
             result_dict[i] = acc
             logging.info(f"Accuracy for {i}th layer is {acc}")
         return result_dict
     else:
         raise NotImplementedError()
 
+
 # original_tokenized = sentence.split(" "); hidden_i = all_hid_list[i]
-def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
+def extract_X_y(args, tokenized, original_tokenized, example, hidden_i):
     """
     Resolve the inconsistency between simple tokenization and BPE
     """
@@ -144,7 +149,7 @@ def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
     target = example[args.target]
     skip_step = 0
     cum_skip_step = 0
-    X,y = [],[]
+    X, y = [], []
     for j in range(len(tokenized)):  # j = 1
         # If there was a concatenation in the prev loop, skip
         if skip_step > 0:
@@ -152,7 +157,7 @@ def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
             cum_skip_step += 1
             continue
         # Special token
-        if tokenized[j] in {"[CLS]","[SEP]"}:
+        if tokenized[j] in {"[CLS]", "[SEP]"}:
             continue
         else:
             # -cum_skip_step for number o0f skips
@@ -160,40 +165,46 @@ def extract_X_y(args,tokenized,original_tokenized,example,hidden_i):
             # logging.debug(f"Original token:{original_tokenized[j-cum_skip_step]}")
 
             # y
-            t = target[j-cum_skip_step-1]
+            t = target[j - cum_skip_step - 1]
             y.append([t])
 
             # If the BPE and original token is consistent, write
-            if tokenized[j] == original_tokenized[j-cum_skip_step]:
+            if tokenized[j] == original_tokenized[j - cum_skip_step]:
                 X.append(hidden_i[j])
             # Else restore the original token
             else:
                 # logging.debug("Inconsistency found")
                 temp_token_list = [tokenized[j]]
                 temp_hid_rep_list = hidden_i[j]
-                for k in range(j+1,len(tokenized)):  # k = 0
+                for k in range(j + 1, len(tokenized)):  # k = 0
                     temp_token_list.append(tokenized[k])
                     temp_hid_rep_list += hidden_i[k]
                     skip_step += 1
                     # If the concatenated BPE matches the original token, write the result
-                    temp = "".join(temp_token_list).replace("##","")
+                    temp = "".join(temp_token_list).replace("##", "")
                     # logging.debug(f"concatenated:{temp}")
-                    if original_tokenized[j-cum_skip_step] == temp:
+                    if original_tokenized[j - cum_skip_step] == temp:
                         # logging.debug(f"Match! {temp}")
                         X.append(temp_hid_rep_list / len(temp_token_list))
                         break
 
-    return np.array(X),np.array(y)
+    return np.array(X), np.array(y)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debug",action='store_true',
+    parser.add_argument("--debug",
+                        action='store_true',
                         help="Debug mode if flagged")  # pos class num = 46
-    parser.add_argument("--target", default="pos",
-                        type=str,
-                        choices = ["position","pos","head"],
-                        help="The target variable to be predicted")  # pos class num = 46
-    parser.add_argument("--epoch_num",type=int,default=10,
+    parser.add_argument(
+        "--target",
+        default="pos",
+        type=str,
+        choices=["position", "pos", "head"],
+        help="The target variable to be predicted")  # pos class num = 46
+    parser.add_argument("--epoch_num",
+                        type=int,
+                        default=10,
                         help="Number of epoch")  # pos class num = 46
     args = parser.parse_args()
 
@@ -203,9 +214,32 @@ if __name__ == '__main__':
         args.epoch_num = 3
     else:
         level = logging.INFO
-    logging.basicConfig(level=level,
-                        format='%(process)d-%(asctime)s-%(levelname)s-%(message)s',
-                        datefmt='%d-%b-%y %H:%M:%S')
+
+    # Init logger
+    file_name = Path().cwd().name
+    logger = getLogger(file_name)
+    logger.setLevel(level)
+    formatter = logging.Formatter(
+        '%(process)d-%(asctime)s-%(levelname)s-%(message)s',
+        datefmt='%d-%b-%y %H:%M:%S')
+
+    # Logging to stdout
+    s_handler = StreamHandler()
+    s_handler.setLevel(level)
+    s_handler.setFormatter(formatter)
+
+    # Logging to file
+    log_file_path = Path(f"log/{file_name}.log")
+    f_handler = FileHandler(log_file_path)
+    f_handler.setLevel(logging.DEBUG)
+    f_handler.setFormatter(formatter)
+
+    if (logger.hasHandlers()):
+        logger.handlers.clear()
+    logger.addHandler(s_handler)
+    logger.addHandler(f_handler)
+
     train(args)
 
     # args = parser.parse_args(["--debug"])
+    # logger.info("Test")
