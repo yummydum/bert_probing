@@ -107,20 +107,44 @@ def calc_corr(A, B):
 # neuron_num = 3985
 def highlight_neuron(neuron_num):
 
+    # Append to string to color the output
+    END = '\033[0m'
+    RED = '\033[41m'
+    YEL = '\u001b[43m'
+    BLUE = '\033[44m'
+    CIAN = '\033[46m'
+
     # # Reindex to the original index
     # layer_num,ind = divmod(neuron_num,768)
 
     # Get the hid rep
     sst_path = Path(f"probing_data/{model_name}/{task_name2}_neuron.npy")
     sst_rep = np.load(sst_path)
-    sst_rep.shape
-
+    rep = sst_rep[:, neuron_num]
     # Plot the distribution of this neuron
-    sns.distplot(sst_rep[:, neuron_num])
+    sns.distplot(rep)
 
     # Get the top 5% activate neuron
+    mean = np.mean(rep)
+    std = np.std(rep)
 
     # Show the text where this activation occured
+    data_path = Path(f"glue_data/{args.evaluation_data}/test.tsv")
+    with data_path.open("r") as f:
+        csv_reader = csv.reader(f, delimiter="\t")
+        next(csv_reader)
+        for row in csv_reader:
+            sentence = "[CLS] " + row[1] + " [SEP]"
+            tokenized = tokenizer.tokenize(sentence)
+            encoded = tokenizer.encode(sentence)
+            tens = torch.LongTensor(encoded).view(1, -1)
+            last_hid, all_hid, all_attention = model(tens)
+
+            # get the activation of
+            layer_num, ind = divmod(neuron_num, all_hid[0].shape[2])
+            activation = all_hid[0][0][layer_num][ind].item()
+            if abs(activation) > std * 2:
+                return
 
 
 def EDA():
@@ -136,7 +160,14 @@ def EDA():
     sst_rep = np.load(sst_path)
 
     # Calc the pairwise corr
-    corr_matrix = calc_corr(cola_rep, sst_rep)  # shape==(9984,9984)
+    corr_path = Path("probing_data/EDA/corr.npy")
+    if not corr_path.exists():
+        corr_matrix = calc_corr(cola_rep, sst_rep)  # shape==(9984,9984)
+        np.save(corr_path, corr_matrix)
+        logger.info("Calculated correlation")
+    else:
+        logger.info("Existing correlation matrix exists: use this")
+        corr_matrix = np.load(corr_path)
     sorted_corr = np.sort(corr_matrix, axis=1)
 
     # There are neurons which moves similarily with each neuron
@@ -184,5 +215,7 @@ if __name__ == '__main__':
     #     "CoLA", "SST-2", "STS-B", "MNLI", "MRPC", "QNLI", "QQP", "RTE", "WNLI"
     # ]
 
-    calc_hid_rep(args, "BERT", "CoLA")
-    calc_hid_rep(args, "BERT", "SST-2")
+    # calc_hid_rep(args, "BERT", "CoLA")
+    # calc_hid_rep(args, "BERT", "SST-2")
+
+    EDA()
