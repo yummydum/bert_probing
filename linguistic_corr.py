@@ -153,7 +153,7 @@ def logistic_reg():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     # activation.shape,result.shape
-    model = LogisticRegression(penalty="elasticnet", solver='lbfgs', n_jobs=20)
+    model = LogisticRegression(penalty="elasticnet", solver='saga', n_jobs=20)
     model.fit(X_train, y_train)
 
     # Save model
