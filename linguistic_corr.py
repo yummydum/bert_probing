@@ -195,6 +195,9 @@ def extract_X_y(args, tokenized, original_tokenized, example, hidden_i):
 def calc_hid_rep():
 
     output_data_path = Path(f"probing_data/BERT/ST_neuron.npy")
+    if output_data_path.exists():
+        return
+
     data_path = Path(f"probing_data/ST/ST-dev.json")
     # Activate the neuron
     with data_path.open("r", encoding="utf-8") as f:
@@ -473,6 +476,7 @@ if __name__ == '__main__':
     logger.addHandler(f_handler)
 
     # train(args)
+    calc_hid_rep()
     logistic_reg()
 
     # args = parser.parse_args(["--debug"])
