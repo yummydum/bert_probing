@@ -3,3 +3,6 @@ glue_data/*
 models/*
 .DS_Store
 __pycache__
+log/*
+.ipynb_checkpoints
+*.ipynb
