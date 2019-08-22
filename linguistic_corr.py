@@ -144,7 +144,9 @@ def logistic_reg():
     logger.info("Now load/processing data")
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
-    X_norm = MinMaxScaler(X)
+    scaler = MinMaxScaler()
+    scaler.fit(X)
+    X_norm = scaler.transform(X)
     pos_path = Path(f"probing_data/BERT/ST_y.npy")
     y = np.load(pos_path)
     X_train, X_test, y_train, y_test = train_test_split(X_norm,
