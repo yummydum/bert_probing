@@ -189,9 +189,8 @@ def logistic_reg():
 
     ## Create and save result
     study = optuna.create_study()  # Create a new study.
-    study.optimize(
-        objective,
-        n_trials=100)  # Invoke optimization of the objective function.
+    study.optimize(objective, n_trials=100,
+                   n_jobs=5)  # Invoke optimization of the objective function.
     df = study.trials_dataframe()
     study_path = Path("probing_data/BERT/ST_probe_tuning_result.csv")
     df.to_csv(study_path)
