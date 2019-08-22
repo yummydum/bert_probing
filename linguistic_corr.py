@@ -17,7 +17,7 @@ import seaborn as sns
 from joblib import dump, load
 import torch
 from pytorch_transformers import BertConfig, BertModel, BertTokenizer
-from sklearn.linear_model import SGDClassifier, LogisticRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import normalize, MinMaxScaler
 import optuna
@@ -142,11 +142,11 @@ def make_pos_y():
 def logistic_reg():
     # Load, normalize, split
     logger.info("Now load/processing data")
-    st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
+    st_neuron_path = Path(f"probing_data/temp/ST_neuron.npy")
     X = np.load(st_neuron_path)
     scaler = MinMaxScaler()
     X_norm = scaler.fit_transform(X)
-    pos_path = Path(f"probing_data/BERT/ST_y.npy")
+    pos_path = Path(f"probing_data/temp/ST_y.npy")
     y = np.load(pos_path)
     X_train, X_test, y_train, y_test = train_test_split(X_norm,
                                                         y,
@@ -164,7 +164,7 @@ def logistic_reg():
 
         model = LogisticRegression(penalty="elasticnet",
                                    solver='saga',
-                                   n_jobs=20,
+                                   n_jobs=30,
                                    l1_ratio=0.3,
                                    multi_class="ovr",
                                    random_state=0,
@@ -197,18 +197,21 @@ def EDA():
 
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
-    X = normalize(X)
-
+    scaler = MinMaxScaler()
+    X_norm = scaler.fit_transform(X)
     pos_path = Path(f"probing_data/BERT/ST_y.npy")
     y = np.load(pos_path)
+    X_train, X_test, y_train, y_test = train_test_split(X_norm,
+                                                        y,
+                                                        test_size=0.2)
 
-    model_path = Path("probing_data/BERT/ST_probe_C_1.3666666666666667.joblib")
+    model_path = Path("probing_data/BERT/ST_probe_C_0.5.joblib")
     model = load(model_path)
+    acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    np.sum(y_test == model.predict(X_test)) / len(y_test)
-
-    coef = model.coef_
+    sorted_coef_ind = np.argsort(model.coef_, axis=1)
+    sorted_ind_path = Path("")
+    np.save()
 
 
 def highlight_neuron(neuron_num):  # neuron_num = 1
