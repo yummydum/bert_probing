@@ -153,20 +153,30 @@ def logistic_reg():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     # activation.shape,result.shape
-    model = LogisticRegression(penalty="elasticnet",
-                               solver='saga',
-                               n_jobs=20,
-                               l1_ratio=0.3)
-    model.fit(X_train, y_train)
+    best_acc = 0
+    best_C = 0
+    for C in np.linspace(0, 2, 30):  # C = 1
+        model = LogisticRegression(penalty="elasticnet",
+                                   solver='saga',
+                                   n_jobs=20,
+                                   l1_ratio=0.3,
+                                   max_iter=200,
+                                   C=C)
+        model.fit(X_train, y_train)
 
-    # Save model
-    logger.info("Now fitting model...")
-    model_path = Path(f"probing_data/BERT/ST_probe.joblib")
-    dump(model, model_path)
+        # Save model
+        logger.info(f"Now fitting model for {C}...")
+        model_path = Path(f"probing_data/BERT/ST_probe_C_{C}.joblib")
+        dump(model, model_path)
 
-    # Show prediction
-    acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
-    logger.info(f"Model accuracy is {acc}")
+        # Show prediction
+        acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
+        logger.info(f"Model accuracy is {acc}")
+        if acc > best_acc:
+            best_acc = acc
+            best_C = C
+
+    logger.info(f"The best param is {best_C} with acc {best_acc}")
 
 
 def EDA():
