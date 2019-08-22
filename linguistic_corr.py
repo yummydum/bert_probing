@@ -20,6 +20,7 @@ from pytorch_transformers import BertConfig, BertModel, BertTokenizer
 from sklearn.linear_model import SGDClassifier, LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import normalize, MinMaxScaler
+import optuna
 
 # notif
 webhook = f"https://hooks.slack.com/services/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"
@@ -150,40 +151,50 @@ def logistic_reg():
                                                         y,
                                                         test_size=0.2)
 
-    # activation.shape,result.shape
+    # Tune hyper param by optuna
+
+    ## objective func
     best_acc = 0
     best_C = 0
-    for C in np.linspace(0.1, 2, 10):  # C = 1
-        try:
-            message = json.dumps({"text": f"Now fitting model for C:{C}"})
-            requests.post(webhook, message)
 
-            model = LogisticRegression(penalty="elasticnet",
-                                       solver='saga',
-                                       n_jobs=30,
-                                       l1_ratio=0.3,
-                                       C=C)
-            model.fit(X_train, y_train)
+    def objective(trial):
 
-            # Save model
-            logger.info(f"Now fitting model for {C}...")
-            model_path = Path(f"probing_data/BERT/ST_probe_C_{C}.joblib")
-            dump(model, model_path)
+        C = trial.suggest_uniform("C", 1, 100)
 
-            # Show prediction
-            acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
-            logger.info(f"Model accuracy is {acc}")
-            message = json.dumps({"text": f"Model accuracy is {acc}"})
-            requests.post(webhook, message)
-            if acc > best_acc:
-                best_acc = acc
-                best_C = C
-            logger.info(f"The best param is {best_C} with acc {best_acc}")
+        message = json.dumps({"text": f"Now fitting model for C:{C}"})
+        requests.post(webhook, message)
 
-        except:
-            message = json.dumps({"text": f"There was error for C:{C}"})
-            requests.post(webhook, message)
-            logger.info(f"Error:C is {C}")
+        model = LogisticRegression(penalty="elasticnet",
+                                   solver='saga',
+                                   n_jobs=5,
+                                   l1_ratio=0.3,
+                                   C=C)
+        model.fit(X_train, y_train)
+
+        # Save model
+        logger.info(f"Now fitting model for {C}...")
+        model_path = Path(f"probing_data/BERT/ST_probe_C_{C}.joblib")
+        dump(model, model_path)
+
+        # Show prediction
+        acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
+        logger.info(f"Model accuracy is {acc}")
+        message = json.dumps({"text": f"Model accuracy is {acc}"})
+        requests.post(webhook, message)
+        if acc > best_acc:
+            best_acc = acc
+            best_C = C
+        logger.info(f"The best param is {best_C} with acc {best_acc}")
+        return 1 - acc
+
+    ## Create and save result
+    study = optuna.create_study()  # Create a new study.
+    study.optimize(
+        objective,
+        n_trials=100)  # Invoke optimization of the objective function.
+    df = study.trials_dataframe()
+    study_path = Path("probing_data/BERT/ST_probe_tuning_result.csv")
+    df.to_csv(study_path)
 
 
 def EDA():
