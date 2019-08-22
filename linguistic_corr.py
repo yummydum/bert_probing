@@ -7,6 +7,7 @@ Probe BERT hidden representations for POS tagging and dependency parsing (Lingui
 """
 
 import argparse
+import requests
 import logging
 from logging import getLogger, StreamHandler, FileHandler
 import json
@@ -18,6 +19,10 @@ import torch
 from pytorch_transformers import BertConfig, BertModel, BertTokenizer
 from sklearn.linear_model import SGDClassifier, LogisticRegression
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import normalize
+
+# notif
+webhook = f"https://hooks.slack.com/services/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"
 
 # fix seed
 np.random.seed(0)
@@ -111,30 +116,7 @@ def calc_hid_rep():
     return
 
 
-def calc_pos_corr():
-    data_path = Path(f"probing_data/ST/ST-dev.json")
-    with data_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    cum_count = 0
-    pos2ind = {k: v for v, k in enumerate(data["all_pos"])}
-    result = np.zeros((len(data["all_pos"]), 40115))
-    for i, data_i in data["data"].items():  # data_i = data["data"]["1"]
-        pos_i = data_i["pos"]
-        for j in range(cum_count, cum_count + len(pos_i)):  # j=0
-            pos_ij = pos_i[j - cum_count]
-            result[pos2ind[pos_ij]][j] = 1
-        cum_count += len(pos_i)
-
-    st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
-    activation = np.load(st_neuron_path)
-
-    pos_corr_path = Path(f"probing_data/BERT/pos_corr.npy")
-    pos_corr = calc_corr(result.T, activation)
-    np.save(pos_corr_path, pos_corr)
-
-
-def logistic_reg():
+def make_pos_y():
     data_path = Path(f"probing_data/ST/ST-dev.json")
     with data_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -148,20 +130,33 @@ def logistic_reg():
             y[j] = pos2ind[pos_i[j - cum_count]]
         cum_count += len(pos_i)
 
+    # Save the pos cat
+    pos_path = Path(f"probing_data/BERT/ST_y.npy")
+    np.save(pos_path, y)
+
+
+def logistic_reg():
+    # Load, normalize, split
+    logger.info("Now load/processing data")
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    X_norm = normalize(X)
+    X_train, X_test, y_train, y_test = train_test_split(X_norm,
+                                                        y,
+                                                        test_size=0.2)
 
     # activation.shape,result.shape
     best_acc = 0
     best_C = 0
-    for C in np.linspace(0, 2, 30):  # C = 1
+    for C in np.linspace(0.1, 2, 10):  # C = 1
         try:
+            message = json.dumps({"text": f"Now fitting model for C:{C}"})
+            requests.post(webhook, message)
+
             model = LogisticRegression(penalty="elasticnet",
                                        solver='saga',
-                                       n_jobs=20,
+                                       n_jobs=30,
                                        l1_ratio=0.3,
-                                       max_iter=200,
                                        C=C)
             model.fit(X_train, y_train)
 
@@ -173,29 +168,35 @@ def logistic_reg():
             # Show prediction
             acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
             logger.info(f"Model accuracy is {acc}")
+            message = json.dumps({"text": f"Model accuracy is {acc}"})
+            requests.post(webhook, message)
             if acc > best_acc:
                 best_acc = acc
                 best_C = C
-        except:
-            logger.info(f"Error:C={C}")
+            logger.info(f"The best param is {best_C} with acc {best_acc}")
 
-    logger.info(f"The best param is {best_C} with acc {best_acc}")
+        except:
+            message = json.dumps({"text": f"There was error for C:{C}"})
+            requests.post(webhook, message)
+            logger.info(f"Error:C is {C}")
 
 
 def EDA():
 
-    # Load pos ind
-    data_path = Path(f"probing_data/ST/ST-dev.json")
-    with data_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    pos2ind = {k: v for v, k in enumerate(data["all_pos"])}
+    st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
+    X = np.load(st_neuron_path)
 
-    # Load corr
-    pos_corr_path = Path(f"probing_data/BERT/pos_corr.npy")
-    pos_corr = np.load(pos_corr_path)
+    model_path = Path("probing_data/BERT/ST_probe.joblib")
+    model = load(model_path)
+    pred = model.predict(X)
 
-    sns.distplot(pos_corr[:, pos2ind["VB"]])
-    # sns.distplot(pos_corr[:,pos2ind["NN"]])
+    pos_path = Path(f"probing_data/BERT/ST_y.npy")
+    y = np.load(pos_path)
+
+    np.sum(y == pred) / len(pred)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
 
 
 def highlight_neuron(neuron_num):  # neuron_num = 1
@@ -281,6 +282,28 @@ def calc_corr(A, B):
     p4 = N * ((A**2).sum(0)) - (sA**2)
     return ((p1 - p2) / np.sqrt(p4 * p3[:, None]))
 
+
+# def calc_pos_corr():
+#     data_path = Path(f"probing_data/ST/ST-dev.json")
+#     with data_path.open("r", encoding="utf-8") as f:
+#         data = json.load(f)
+#
+#     cum_count = 0
+#     pos2ind = {k: v for v, k in enumerate(data["all_pos"])}
+#     result = np.zeros((len(data["all_pos"]), 40115))
+#     for i, data_i in data["data"].items():  # data_i = data["data"]["1"]
+#         pos_i = data_i["pos"]
+#         for j in range(cum_count, cum_count + len(pos_i)):  # j=0
+#             pos_ij = pos_i[j - cum_count]
+#             result[pos2ind[pos_ij]][j] = 1
+#         cum_count += len(pos_i)
+#
+#     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
+#     activation = np.load(st_neuron_path)
+#
+#     pos_corr_path = Path(f"probing_data/BERT/pos_corr.npy")
+#     pos_corr = calc_corr(result.T, activation)
+#     np.save(pos_corr_path, pos_corr)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
