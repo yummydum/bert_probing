@@ -168,10 +168,9 @@ def logistic_reg():
 
         model = LogisticRegression(penalty="elasticnet",
                                    solver='saga',
-                                   n_jobs=5,
+                                   n_jobs=10,
                                    l1_ratio=0.3,
-                                   C=C)
-        model.fit(X_train, y_train)
+                                   C=C).fit(X_train, y_train)
 
         # Save model
         logger.info(f"Now fitting model for {C}...")
@@ -181,6 +180,8 @@ def logistic_reg():
         # Show prediction
         acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
         logger.info(f"Model accuracy is {acc}")
+
+        # Notify
         message = json.dumps({"text": f"Model accuracy is {acc}"})
         requests.post(webhook, message)
         if acc > best_acc:
@@ -192,7 +193,7 @@ def logistic_reg():
     ## Create and save result
     study = optuna.create_study()  # Create a new study.
     study.optimize(objective, n_trials=100,
-                   n_jobs=5)  # Invoke optimization of the objective function.
+                   n_jobs=3)  # Invoke optimization of the objective function.
     df = study.trials_dataframe()
     study_path = Path("probing_data/BERT/ST_probe_tuning_result.csv")
     df.to_csv(study_path)
@@ -202,18 +203,18 @@ def EDA():
 
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
-
-    model_path = Path("probing_data/BERT/ST_probe.joblib")
-    model = load(model_path)
-    pred = model.predict(X)
+    X = normalize(X)
 
     pos_path = Path(f"probing_data/BERT/ST_y.npy")
     y = np.load(pos_path)
 
-    np.sum(y == pred) / len(pred)
+    model_path = Path("probing_data/BERT/ST_probe_C_1.3666666666666667.joblib")
+    model = load(model_path)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
+    np.sum(y_test == model.predict(X_test)) / len(y_test)
+
+    model.param
 
 
 def highlight_neuron(neuron_num):  # neuron_num = 1
