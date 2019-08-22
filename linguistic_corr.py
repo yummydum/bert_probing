@@ -159,44 +159,39 @@ def logistic_reg():
     best_acc = 0
     best_C = 0
 
-    def objective(trial):
-
-        C = trial.suggest_uniform("C", 1, 100)
-
+    for C in np.linspace(0.5, 2, 10):
         message = json.dumps({"text": f"Now fitting model for C:{C}"})
         requests.post(webhook, message)
 
         model = LogisticRegression(penalty="elasticnet",
                                    solver='saga',
-                                   n_jobs=10,
+                                   n_jobs=30,
                                    l1_ratio=0.3,
+                                   multi_class="multinomial",
+                                   random_state=0,
                                    C=C).fit(X_train, y_train)
 
         # Save model
-        logger.info(f"Now fitting model for {C}...")
         model_path = Path(f"probing_data/BERT/ST_probe_C_{C}.joblib")
         dump(model, model_path)
 
-        # Show prediction
+        # Accuracy
         acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
         logger.info(f"Model accuracy is {acc}")
-
-        # Notify
         message = json.dumps({"text": f"Model accuracy is {acc}"})
         requests.post(webhook, message)
         if acc > best_acc:
             best_acc = acc
             best_C = C
         logger.info(f"The best param is {best_C} with acc {best_acc}")
-        return 1 - acc
 
     ## Create and save result
-    study = optuna.create_study()  # Create a new study.
-    study.optimize(objective, n_trials=100,
-                   n_jobs=3)  # Invoke optimization of the objective function.
-    df = study.trials_dataframe()
-    study_path = Path("probing_data/BERT/ST_probe_tuning_result.csv")
-    df.to_csv(study_path)
+    # study = optuna.create_study()  # Create a new study.
+    # study.optimize(objective, n_trials=100,
+    #                n_jobs=3)  # Invoke optimization of the objective function.
+    # df = study.trials_dataframe()
+    # study_path = Path("probing_data/BERT/ST_probe_tuning_result.csv")
+    # df.to_csv(study_path)
 
 
 def EDA():
@@ -214,7 +209,7 @@ def EDA():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     np.sum(y_test == model.predict(X_test)) / len(y_test)
 
-    model.param
+    coef = model.coef_
 
 
 def highlight_neuron(neuron_num):  # neuron_num = 1
