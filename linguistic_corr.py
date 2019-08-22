@@ -141,6 +141,8 @@ def logistic_reg():
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
     X_norm = normalize(X)
+    pos_path = Path(f"probing_data/BERT/ST_y.npy")
+    y = np.load(pos_path)
     X_train, X_test, y_train, y_test = train_test_split(X_norm,
                                                         y,
                                                         test_size=0.2)
