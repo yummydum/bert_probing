@@ -19,7 +19,7 @@ import torch
 from pytorch_transformers import BertConfig, BertModel, BertTokenizer
 from sklearn.linear_model import SGDClassifier, LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import normalize
+from sklearn.preprocessing import normalize, MinMaxScaler
 
 # notif
 webhook = f"https://hooks.slack.com/services/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"
@@ -143,7 +143,7 @@ def logistic_reg():
     logger.info("Now load/processing data")
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
-    X_norm = normalize(X)
+    X_norm = MinMaxScaler(X)
     pos_path = Path(f"probing_data/BERT/ST_y.npy")
     y = np.load(pos_path)
     X_train, X_test, y_train, y_test = train_test_split(X_norm,
