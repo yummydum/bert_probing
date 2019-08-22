@@ -145,8 +145,7 @@ def logistic_reg():
     st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
     X = np.load(st_neuron_path)
     scaler = MinMaxScaler()
-    scaler.fit(X)
-    X_norm = scaler.transform(X)
+    X_norm = scaler.fit_transform(X)
     pos_path = Path(f"probing_data/BERT/ST_y.npy")
     y = np.load(pos_path)
     X_train, X_test, y_train, y_test = train_test_split(X_norm,
@@ -165,9 +164,9 @@ def logistic_reg():
 
         model = LogisticRegression(penalty="elasticnet",
                                    solver='saga',
-                                   n_jobs=10,
+                                   n_jobs=1,
                                    l1_ratio=0.3,
-                                   multi_class="multinomial",
+                                   multi_class="ovr",
                                    random_state=0,
                                    C=C).fit(X_train, y_train)
 
