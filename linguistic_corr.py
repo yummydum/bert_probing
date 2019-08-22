@@ -117,6 +117,10 @@ def calc_hid_rep():
 
 
 def make_pos_y():
+    pos_path = Path(f"probing_data/BERT/ST_y.npy")
+    if pos_path.exists():
+        return
+
     data_path = Path(f"probing_data/ST/ST-dev.json")
     with data_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -131,7 +135,6 @@ def make_pos_y():
         cum_count += len(pos_i)
 
     # Save the pos cat
-    pos_path = Path(f"probing_data/BERT/ST_y.npy")
     np.save(pos_path, y)
 
 
@@ -357,6 +360,7 @@ if __name__ == '__main__':
     logger.addHandler(f_handler)
 
     # train(args)
+    make_pos_y()
     calc_hid_rep()
     logistic_reg()
 
