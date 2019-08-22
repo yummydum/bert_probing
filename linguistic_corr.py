@@ -164,7 +164,7 @@ def logistic_reg():
 
         model = LogisticRegression(penalty="elasticnet",
                                    solver='saga',
-                                   n_jobs=1,
+                                   n_jobs=20,
                                    l1_ratio=0.3,
                                    multi_class="ovr",
                                    random_state=0,
