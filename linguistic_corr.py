@@ -146,7 +146,7 @@ def logistic_reg():
     X = np.load(st_neuron_path)
     scaler = MinMaxScaler()
     X_norm = scaler.fit_transform(X)
-    pos_path = Path(f"probing_data/temp/ST_y.npy")
+    pos_path = Path(f"probing_data/temp/ST_y.npy")  # X_norm[0]
     y = np.load(pos_path)
     X_train, X_test, y_train, y_test = train_test_split(X_norm,
                                                         y,
@@ -157,32 +157,31 @@ def logistic_reg():
     ## objective func
     best_acc = 0
     best_C = 0
+    C = 1.3
+    message = json.dumps({"text": f"Now fitting model for C:{C}"})
+    requests.post(webhook, message)
 
-    for C in np.linspace(0.5, 2, 10):
-        message = json.dumps({"text": f"Now fitting model for C:{C}"})
-        requests.post(webhook, message)
+    model = LogisticRegression(penalty="elasticnet",
+                               solver='saga',
+                               n_jobs=30,
+                               l1_ratio=0.3,
+                               multi_class="ovr",
+                               random_state=0,
+                               C=C).fit(X_train, y_train)
 
-        model = LogisticRegression(penalty="elasticnet",
-                                   solver='saga',
-                                   n_jobs=30,
-                                   l1_ratio=0.3,
-                                   multi_class="ovr",
-                                   random_state=0,
-                                   C=C).fit(X_train, y_train)
+    # Save model
+    model_path = Path(f"probing_data/BERT/ST_probe_C_{C}.joblib")
+    dump(model, model_path)
 
-        # Save model
-        model_path = Path(f"probing_data/BERT/ST_probe_C_{C}.joblib")
-        dump(model, model_path)
-
-        # Accuracy
-        acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
-        logger.info(f"Model accuracy is {acc}")
-        message = json.dumps({"text": f"Model accuracy is {acc}"})
-        requests.post(webhook, message)
-        if acc > best_acc:
-            best_acc = acc
-            best_C = C
-        logger.info(f"The best param is {best_C} with acc {best_acc}")
+    # Accuracy
+    acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
+    logger.info(f"Model accuracy is {acc}")
+    message = json.dumps({"text": f"Model accuracy is {acc}"})
+    requests.post(webhook, message)
+    if acc > best_acc:
+        best_acc = acc
+        best_C = C
+    logger.info(f"The best param is {best_C} with acc {best_acc}")
 
     ## Create and save result
     # study = optuna.create_study()  # Create a new study.
@@ -205,16 +204,23 @@ def EDA():
                                                         y,
                                                         test_size=0.2)
 
-    model_path = Path("probing_data/BERT/ST_probe_C_0.5.joblib")
+    model_path = Path("probing_data/BERT/temp_probe_model.joblib")
     model = load(model_path)
     acc = np.sum(y_test == model.predict(X_test)) / len(y_test)
 
     sorted_coef_ind = np.argsort(model.coef_, axis=1)
-    sorted_ind_path = Path("")
-    np.save()
+
+    data_path = Path(f"probing_data/ST/ST-dev.json")
+    with data_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    pos2ind = {k: v for v, k in enumerate(data["all_pos"])}
+    ind2pos = {k: v for k, v in enumerate(data["all_pos"])}
 
 
-def highlight_neuron(neuron_num):  # neuron_num = 1
+# neuron_num = 1741
+# st_neuron_path = Path(f"probing_data/BERT/ST_neuron.npy")
+# X = np.load(st_neuron_path)
+def highlight_neuron(neuron_num, X):  # neuron_num = 2114
 
     # Append to string to color the output
     END = '\033[0m'
@@ -223,13 +229,8 @@ def highlight_neuron(neuron_num):  # neuron_num = 1
     BLUE = '\033[44m'
     CIAN = '\033[46m'
 
-    # # Reindex to the original index
-    # layer_num,ind = divmod(neuron_num,768)
-
     # Get the hid rep
-    np_path = Path(f"probing_data/BERT/ST_neuron.npy")
-    sst_rep = np.load(np_path)  # sst_rep.shape
-    rep = sst_rep[:, neuron_num]
+    rep = X[:, neuron_num]
     # Plot the distribution of this neuron
     sns.distplot(rep)
 
@@ -370,8 +371,8 @@ if __name__ == '__main__':
     logger.addHandler(f_handler)
 
     # train(args)
-    make_pos_y()
-    calc_hid_rep()
+    #make_pos_y()
+    #calc_hid_rep()
     logistic_reg()
 
     # args = parser.parse_args(["--debug"])

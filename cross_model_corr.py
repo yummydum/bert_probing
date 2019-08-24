@@ -84,7 +84,7 @@ def load_model(model_name: str, task_name: str):
         model_path = str(Path(f"models/{model_name}/{task_name}/"))
         model = BertForSequenceClassification.from_pretrained(model_path,
                                                               config=config)
-        cache[model_name][task_name] = model
+        cache[model_name][task_name] = model.eval()
     return cache[model_name][task_name]
 
 
@@ -105,7 +105,10 @@ def calc_corr(A, B):
 
 
 # neuron_num = 3985
-def highlight_neuron(neuron_num):
+# model_name = "BERT"
+# task_name = "SST-2"
+# np_path = Path(f"probing_data/BERT/SST-2_neuron.npy")
+def highlight_neuron(neuron_num, np_path):
 
     # Append to string to color the output
     END = '\033[0m'
@@ -118,8 +121,11 @@ def highlight_neuron(neuron_num):
     # layer_num,ind = divmod(neuron_num,768)
 
     # Get the hid rep
-    sst_path = Path(f"probing_data/{model_name}/{task_name2}_neuron.npy")
-    sst_rep = np.load(sst_path)
+    if "activation" not in cache:
+        sst_rep = np.load(np_path)
+        cache["activation"] = sst_rep  # sst_rep.shape
+    else:
+        sst_rep = cache["activation"]
     rep = sst_rep[:, neuron_num]
     # Plot the distribution of this neuron
     sns.distplot(rep)
@@ -128,61 +134,107 @@ def highlight_neuron(neuron_num):
     mean = np.mean(rep)
     std = np.std(rep)
 
+    # Init acc
+    result = []
+    pos_dict = dict()
+    neg_dict = dict()
+
     # Show the text where this activation occured
-    data_path = Path(f"glue_data/{args.evaluation_data}/test.tsv")
-    with data_path.open("r") as f:
+    data_path = Path(f"glue_data/SST-2/test.tsv")
+    with data_path.open("r", encoding="utf-8") as f:
         csv_reader = csv.reader(f, delimiter="\t")
         next(csv_reader)
-        for row in csv_reader:
+        cum_count = 0
+        for i, row in enumerate(csv_reader):
+
+            # Get the activation
             sentence = "[CLS] " + row[1] + " [SEP]"
             tokenized = tokenizer.tokenize(sentence)
-            encoded = tokenizer.encode(sentence)
-            tens = torch.LongTensor(encoded).view(1, -1)
-            last_hid, all_hid, all_attention = model(tens)
+            activation = rep[cum_count:cum_count + len(tokenized)]
+            cum_count += len(tokenized)
 
-            # get the activation of
-            layer_num, ind = divmod(neuron_num, all_hid[0].shape[2])
-            activation = all_hid[0][0][layer_num][ind].item()
-            if abs(activation) > std * 2:
-                return
+            # Mark if the activation deviates
+            is_pos = activation > mean + 1.96 * std
+            is_neg = activation < mean - 1.96 * std
+            if is_pos.any() or is_neg.any():
+                result_i = []
+                for p, n, tok in zip(is_pos, is_neg, tokenized):
+                    if p:
+                        result_i.append(RED + tok + END)
+                        if tok not in pos_dict:
+                            pos_dict[tok] = 0
+                        pos_dict[tok] += 1
+                    elif n:
+                        result_i.append(BLUE + tok + END)
+                        if tok not in neg_dict:
+                            neg_dict[tok] = 0
+                        neg_dict[tok] += 1
+                    else:
+                        result_i.append(tok)
+                result.append(" ".join(result_i))
+
+            if i == 1000:
+                break
+
+    pos_tok = sorted(pos_dict.items(), key=lambda x: x[1], reverse=True)
+    neg_tok = sorted(neg_dict.items(), key=lambda x: x[1], reverse=True)
+
+    return result, pos_tok, neg_tok
 
 
 def EDA():
 
-    model_name = "BERT"
-    task_name1 = "SST-2"
-    task_name2 = "CoLA"
+    result, pos_tok, neg_tok = highlight_neuron(sorted_ind[-99], sst_path)
+    for sentence in result:
+        print(sentence)
+    for tok, count in pos_tok:
+        print(tok, count)
+    for tok, count in neg_tok:
+        print(tok, count)
 
-    # Load the hid rep
-    cola_path = Path(f"probing_data/{model_name}/{task_name1}_neuron.npy")
-    cola_rep = np.load(cola_path)
-    sst_path = Path(f"probing_data/{model_name}/{task_name2}_neuron.npy")
-    sst_rep = np.load(sst_path)
+    result, pos_tok, neg_tok = highlight_neuron(sorted_ind[-11], sst_path)
+    for sentence in result:
+        print(sentence)
+    for tok, count in pos_tok:
+        print(tok, count)
+    for tok, count in neg_tok:
+        print(tok, count)
 
-    # Calc the pairwise corr
-    corr_path = Path("probing_data/EDA/corr.npy")
-    if not corr_path.exists():
-        corr_matrix = calc_corr(cola_rep, sst_rep)  # shape==(9984,9984)
-        np.save(corr_path, corr_matrix)
-        logger.info("Calculated correlation")
-    else:
-        logger.info("Existing correlation matrix exists: use this")
-        corr_matrix = np.load(corr_path)
-    sorted_corr = np.sort(corr_matrix, axis=1)
+    # CLS and preposition for negative activation?
+    result, pos_tok, neg_tok = highlight_neuron(sorted_ind[-10], sst_path)
+    for sentence in result:
+        print(sentence)
+    for tok, count in pos_tok:
+        print(tok, count)
+    for tok, count in neg_tok:
+        print(tok, count)
 
-    # There are neurons which moves similarily with each neuron
-    # However layer in the lower layer has this tendency strongly
-    n = 3
-    mean_topn = np.mean(sorted_corr[:, -n:], axis=1)
-    fig, ax = plt.subplots()
-    ax.plot(range(len(mean_topn)), mean_topn)
+    #
 
     # Maybe neuron with low corr are task specific...
-    low_corr_neuron_ind = np.argsort(mean_topn)[:100]
+    result, pos_tok, neg_tok = highlight_neuron(low_corr_neuron_ind[0],
+                                                sst_path)
+    for sentence in highlighted:
+        print(sentence)
+    for tok, count in pos_tok:
+        print(tok, count)
+    for tok, count in neg_tok:
+        print(tok, count)
+
+    # Measure the distance between the whole vocabulary to see specific activation
 
 
-def EDA2():
-    return
+def calc_KL():
+
+    data_path = Path(f"glue_data/{args.evaluation_data}/test.tsv")
+    with data_path.open("r", encoding="utf-8") as f:
+        csv_reader = csv.reader(f, delimiter="\t")
+        next(csv_reader)
+        for i, row in enumerate(csv_reader):
+            sentence = "[CLS] " + row[1] + " [SEP]"
+            tokenized = tokenizer.tokenize(sentence)
+
+    # Whole KL
 
 
 if __name__ == '__main__':
