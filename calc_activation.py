@@ -120,7 +120,7 @@ def align_rep_by_tokenization(tokenized: List, word_piece: List, all_hid):
     return aligned_rep  # aligned_rep.shape = ()
 
 
-def main():
+def main(args):
     # Path("data/BERT").mkdir()
     output_data_path = Path(f"data/BERT/ST_neuron.npy")
     if output_data_path.exists():
@@ -172,3 +172,4 @@ if __name__ == '__main__':
                         help="Debug mode if flagged")  # pos class num = 46
     args = parser.parse_args()
     # args = parser.parse_args(["--debug"])
+    main(args)
