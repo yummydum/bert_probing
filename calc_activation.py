@@ -7,6 +7,12 @@ import torch
 from pytorch_transformers import BertConfig, BertModel, BertTokenizer
 from util import set_logger
 
+# Handle GPU
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+
 # Globals
 logger = set_logger(__name__)
 model_type = 'bert-base-uncased'
@@ -16,12 +22,6 @@ config.output_hidden_states = True
 config.output_attentions = True
 model = BertModel(config).to(device)
 model.eval()
-
-# Handle GPU
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-else:
-    device = torch.device('cpu')
 
 
 def pad(encoded_list):
