@@ -52,7 +52,7 @@ def load_data(args):
             wordpiece_list.append(tokenizer.tokenize(sentence))
             encoded_list.append(tokenizer.encode(sentence))
             if i % 3000 == 0:
-                logger.info(f"Now at {i}th row")
+                logger.info(f"Now loading data: at {i}th row")
             if args.debug and i == 4:
                 logger.debug("Break loop (debug mode)")
                 break
@@ -115,7 +115,7 @@ def align_rep_by_tokenization(tokenized: List, word_piece: List, all_hid):
         else:
             aligned_rep = np.concatenate((aligned_rep, all_hid_array), axis=0)
         if i % 1000 == 0:
-            logger.info(f"Now at {i}th example")
+            logger.info(f"Now aligning the all_hid: {i}th example")
 
     return aligned_rep  # aligned_rep.shape = ()
 
@@ -132,13 +132,16 @@ def main(args):
     padded_encoded_list, mask = pad(encoded_list)
 
     # Forward
+    logger.info("Now forwarding the data...")
     with torch.no_grad():
         result_tensor = torch.LongTensor(padded_encoded_list)
         mask = torch.LongTensor(mask)
+        logger.info(f"The shape of tensor is {result_tensor.shape}")
         last_hid, pooler, all_hid, all_attention = model(result_tensor,
                                                          attention_mask=mask)
 
     # Save the result
+    logger.info("Start aligning the hid rep")
     aligned_rep = align_rep_by_tokenization(tokenized, word_piece, all_hid)
     np.save(output_data_path, aligned_rep)
     return
