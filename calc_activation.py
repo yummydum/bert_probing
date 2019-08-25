@@ -14,8 +14,14 @@ tokenizer = BertTokenizer.from_pretrained(model_type)
 config = BertConfig.from_pretrained(model_type)
 config.output_hidden_states = True
 config.output_attentions = True
-model = BertModel(config)
+model = BertModel(config).to(device)
 model.eval()
+
+# Handle GPU
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
 
 
 def pad(encoded_list):
@@ -86,7 +92,7 @@ def align_rep_by_tokenization(tokenized: List, word_piece: List, all_hid):
                 # If the BPE and original token is consistent, write
                 if word_piece[i][j] == tokenized[i][j - cum_skips - 1]:
                     temp = np.concatenate([
-                        x.squeeze().numpy()[i][j] for x in all_hid
+                        x.squeeze().cpu().numpy()[i][j] for x in all_hid
                     ])  # x=all_hid[0];x.squeeze().numpy().shape
                     restored_hid.append(temp)
 
@@ -95,11 +101,11 @@ def align_rep_by_tokenization(tokenized: List, word_piece: List, all_hid):
                     # logging.debug("Inconsistency found")
                     temp_token_list = [word_piece[i][j]]
                     temp_hid_rep_list = np.concatenate(
-                        [x.squeeze()[i][j].numpy() for x in all_hid])
+                        [x.squeeze()[i][j].cpu().numpy() for x in all_hid])
                     for k in range(j + 1, len(word_piece[i])):  # k = 0
                         temp_token_list.append(word_piece[i][k])
                         temp_hid_rep_list += np.concatenate(
-                            [x.squeeze()[i][k].numpy() for x in all_hid])
+                            [x.squeeze()[i][k].cpu().numpy() for x in all_hid])
                         skips += 1
                         # If the concatenated BPE matches the original token, write the result
                         temp = "".join(temp_token_list).replace("##", "")
@@ -129,13 +135,14 @@ def main(args):
 
     # Load the data in tokenized form and BERT encoded list
     tokenized, word_piece, encoded_list = load_data(args)
+    logger.info("Loaded all data, now padding...")
     padded_encoded_list, mask = pad(encoded_list)
 
     # Forward
     logger.info("Now forwarding the data...")
     with torch.no_grad():
-        result_tensor = torch.LongTensor(padded_encoded_list)
-        mask = torch.LongTensor(mask)
+        result_tensor = torch.LongTensor(padded_encoded_list).to(device)
+        mask = torch.LongTensor(mask).to(device)
         logger.info(f"The shape of tensor is {result_tensor.shape}")
         last_hid, pooler, all_hid, all_attention = model(result_tensor,
                                                          attention_mask=mask)
