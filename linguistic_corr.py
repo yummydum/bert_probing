@@ -7,7 +7,6 @@ Probe BERT hidden representations for POS tagging and dependency parsing (Lingui
 """
 
 import argparse
-import requests
 import logging
 from logging import getLogger, StreamHandler, FileHandler
 import json
@@ -21,9 +20,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import normalize, MinMaxScaler
 import optuna
-
-# notif
-webhook = f"https://hooks.slack.com/services/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"
 
 # fix seed
 np.random.seed(0)
