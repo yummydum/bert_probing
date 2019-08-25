@@ -35,7 +35,7 @@ def pad(encoded_list):
     return padded, mask
 
 
-def load_data():
+def load_data(args):
     """ Data should be in tsv format. """
     tokenized_list = []
     wordpiece_list = []
@@ -124,10 +124,11 @@ def main(args):
     # Path("data/BERT").mkdir()
     output_data_path = Path(f"data/BERT/ST_neuron.npy")
     if output_data_path.exists():
+        logger.info("The result already exists. Exit")
         return
 
     # Load the data in tokenized form and BERT encoded list
-    tokenized, word_piece, encoded_list = load_data()
+    tokenized, word_piece, encoded_list = load_data(args)
     padded_encoded_list, mask = pad(encoded_list)
 
     # Forward
